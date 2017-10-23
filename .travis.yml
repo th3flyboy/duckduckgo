@@ -1,0 +1,24 @@
+---
+sudo: false
+addons:
+  apt_packages:
+    - libmpfr-dev
+before_install:
+  - export HARNESS_OPTIONS=j10:c HARNESS_TIMER=1
+  - git config --global user.name "Dist Zilla Plugin TravisCI"
+  - git config --global user.email $HOSTNAME":not-for-mail@travis-ci.org"
+install:
+  - cpanm --quiet --notest Dist::Zilla
+  - >
+      cpanm --quiet --notest --mirror http://www.cpan.org/ --mirror http://duckpan.org
+      DDG::GoodieBundle::OpenSourceDuckDuckGo
+      DDG::SpiceBundle::OpenSourceDuckDuckGo
+      DDG::FatheadBundle::OpenSourceDuckDuckGo
+      DDG::LongtailBundle::OpenSourceDuckDuckGo
+  - dzil authordeps | grep -ve '^\W' | xargs -n 5 -P 10 cpanm --mirror http://cpan.org --mirror http://duckpan.org --quiet --notest
+  - dzil listdeps | grep -ve '^\W' | cpanm --quiet --notest --mirror http://www.cpan.org/ --mirror http://duckpan.org
+language: perl
+perl:
+  - '5.16'
+script:
+  - dzil smoke --release --author

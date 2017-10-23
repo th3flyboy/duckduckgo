@@ -4,6 +4,7 @@ package DDG::Meta;
 use strict;
 use warnings;
 use Carp;
+require Data::Printer;
 
 use DDG::Meta::RequestHandler;
 use DDG::Meta::ZeroClickInfo;
@@ -14,6 +15,7 @@ use DDG::Meta::Block;
 use DDG::Meta::Information;
 use DDG::Meta::Helper;
 use DDG::Meta::AnyBlock;
+use DDG::Meta::CountryCodes;
 
 use MooX ();
 
@@ -112,7 +114,7 @@ sub apply_spice_keywords {
 sub apply_fathead_keywords {
     my ( $class, $target ) = @_;
     DDG::Meta::ZeroClickInfo->apply_keywords($target);
-	DDG::Meta::ShareDir->apply_keywords($target);
+    DDG::Meta::ShareDir->apply_keywords($target);
     DDG::Meta::Fathead->apply_keywords($target);
     DDG::Meta::Information->apply_keywords($target);    
     DDG::Meta::AnyBlock->apply_keywords($target);
@@ -126,7 +128,7 @@ sub apply_fathead_keywords {
 sub apply_longtail_keywords {
     my ( $class, $target ) = @_;
     DDG::Meta::ZeroClickInfo->apply_keywords($target);
-	DDG::Meta::ShareDir->apply_keywords($target);
+    DDG::Meta::ShareDir->apply_keywords($target);
     DDG::Meta::Information->apply_keywords($target);
     DDG::Meta::AnyBlock->apply_keywords($target);
     Moo::Role->apply_role_to_package($target, "DDG::IsLongtail");

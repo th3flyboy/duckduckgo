@@ -15,6 +15,10 @@ use DDG::Test::Spice;
 use DDGTest::Spice::Words;
 use DDGTest::Spice::Regexp;
 use DDGTest::Spice::Data;
+use DDGTest::Spice::Cached;
+use DDGTest::Spice::ChangeCached;
+use DDGTest::Spice::MultiTriggerType;
+use DDGTest::Spice::AltTo;
 
 use DDG::ZeroClickInfo::Spice;
 
@@ -47,8 +51,12 @@ is_deeply(DDGTest::Spice::Regexp->get_triggers,{
 },'Checking resulting get_triggers of DDGTest::Spice::Regexp',);
 
 is(DDGTest::Spice::Regexp->get_nginx_conf,'location ^~ /js/spice/regexp/ {
+	set $regexp_upstream http://some.api:80;
 	rewrite ^/js/spice/regexp/(.*) / break;
-	proxy_pass http://some.api:80/;
+	proxy_pass $regexp_upstream;
+	proxy_intercept_errors on;
+	error_page 301 302 303 403 404 500 502 503 504 =200 /js/failed/ddgtest_spice_regexp;
+	expires 1s;
 }
 ',"Checking standard nginx_conf");
 
@@ -60,11 +68,18 @@ my $zci_spice = DDG::ZeroClickInfo::Spice->new(
 isa_ok($zci_spice,'DDG::ZeroClickInfo::Spice');
 is($zci_spice->call,'/js/spice/some_thing/a%23%23a/b%20%20b/c%23%3F%3Fc','Checking for proper call path');
 
+alt_to_test('DDGTest::Spice::AltTo', [qw(alt1 alt2)]);
+
 ddg_spice_test(
 	# DDGTest::Spice::Flashtest
 	[qw(
 		DDGTest::Spice::Data
 		DDGTest::Spice::Regexp
+		DDGTest::Spice::Cached
+		DDGTest::Spice::ChangeCached
+		DDGTest::Spice::MultiTriggerType
+		DDGTest::Spice::AltTo
+		DDGTest::Spice::CallTypeSelf
 	)],
 	'data test' => test_spice( 
 		'/js/spice/data/test',
@@ -76,6 +91,60 @@ ddg_spice_test(
 		'/js/spice/regexp/test.a/DDG%3A%3ARequest',
 		call_type => 'include',
 		caller => 'DDGTest::Spice::Regexp'
+	),
+	'testing cached' => test_spice( 
+		'/js/spice/cached/testing',
+		call_type => 'include',
+		caller => 'DDGTest::Spice::Cached',
+		is_cached => 1
+	),
+	'test changed caching' => test_spice( 
+		'/js/spice/change_cached/test',
+		call_type => 'include',
+		caller => 'DDGTest::Spice::ChangeCached',
+		is_cached => 1
+	),
+	'not caching changed caching' => test_spice( 
+		'/js/spice/change_cached/not%20caching',
+		call_type => 'include',
+		caller => 'DDGTest::Spice::ChangeCached',
+		is_cached => 0
+	),
+	'firstword secondword multitrigger test' => test_spice( 
+		'/js/spice/multi_trigger_type/multitrigger%20test',
+		call_type => 'include',
+		caller => 'DDGTest::Spice::MultiTriggerType',
+		is_cached => 1
+	),
+	'firstword multitrigger test' => test_spice( 
+		'/js/spice/multi_trigger_type/multitrigger%20test',
+		call_type => 'include',
+		caller => 'DDGTest::Spice::MultiTriggerType',
+		is_cached => 1
+	),
+	'multitrigger test secondword thirdword' => test_spice(  
+		'/js/spice/multi_trigger_type/multitrigger%20test',
+		call_type => 'include',
+		caller => 'DDGTest::Spice::MultiTriggerType',
+		is_cached => 1
+	),
+		'multitrigger test thirdword' => test_spice(  
+		'/js/spice/multi_trigger_type/multitrigger%20test',
+		call_type => 'include',
+		caller => 'DDGTest::Spice::MultiTriggerType',
+		is_cached => 1
+	),
+	'alt_to test' => test_spice(
+		'/js/spice/alt_to/test',
+		call_type => 'include',
+		caller => 'DDGTest::Spice::AltTo',
+		is_cached => 1
+	),
+	'call type self "999"' => test_spice(
+		'%22999%22',
+		call_type => 'self',
+		caller => 'DDGTest::Spice::CallTypeSelf',
+		is_cached => 1
 	),
 	# 'flash version' => test_spice( 
 	# 	'/js/spice/flashtest',

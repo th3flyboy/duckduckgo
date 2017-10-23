@@ -10,6 +10,19 @@ use DDG::Request;
 BEGIN {
 
 	my @t = (
+		''                            => {
+			query_raw                 => '',
+			query                     => '',
+			query_lc                  => '',
+			query_nowhitespace        => '',
+			query_nowhitespace_nodash => '',
+			query_clean               => '',
+			wordcount                 => 0,
+			query_raw_parts           => [],
+			query_parts               => [],
+			words                     => [],
+			triggers                  => {},
+		},
 		'   !bang test'                   => {
 			query_raw                 => '   !bang test',
 			query                     => '!bang test',
@@ -70,9 +83,9 @@ BEGIN {
 			query_parts                       => ['%"test',qq{%\)\(\)%!%§},'+##+tesfsd'],
 			words                             => [qw( test tesfsd )],
 			triggers                  => {
-				0 => ['%"test'],
-				2 => ['%)()%!%§'],
-				4 => ['+##+tesfsd'],
+				0 => ['', ' test', '%"test', 'test'],
+				2 => ['', '%)()%!%§'],
+				4 => ['', ' tesfsd', '+##+tesfsd', 'tesfsd' ],
 			},
 		},
 		'test...test test...Test?'         => {
@@ -133,16 +146,16 @@ BEGIN {
 		},
 		'a really very very very very very long query 0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' => {
 			query_raw                 => 'a really very very very very very long query 0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-			query                     => 'a really very very very very very long query',
-			query_lc                  => 'a really very very very very very long query',
-			query_nowhitespace        => 'areallyveryveryveryveryverylongquery',
-			query_nowhitespace_nodash => 'areallyveryveryveryveryverylongquery',
-			query_clean               => 'a really very very very very very long query',
-			wordcount                 => 9,
+			query                     => 'a really very very very very very long query 0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+			query_lc                  => 'a really very very very very very long query 0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789',
+			query_nowhitespace        => 'areallyveryveryveryveryverylongquery0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+			query_nowhitespace_nodash => 'areallyveryveryveryveryverylongquery0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+			query_clean               => 'a really very very very very very long query 0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789',
+			wordcount                 => 10,
 			query_raw_parts           => [ 'a', ' ', 'really', ' ', 'very', ' ', 'very', ' ', 'very', ' ', 'very', ' ', 'very', ' ', 'long',
 				' ', 'query', ' ', '0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' ],
-			query_parts               => [qw( a really very very very very very long query )],
-			words                     => [qw( a really very very very very very long query )],
+			query_parts               => [qw( a really very very very very very long query 0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789)],
+			words                     => [qw( a really very very very very very long query 0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789)],
 			triggers                  => {
 				0 => ["a"],
 				2 => ["really"],
@@ -178,7 +191,12 @@ BEGIN {
 			is_deeply($req->combined_lc_words($param),$result{$result_key},'Testing '.$result_key.' of "'.$query.'"') if defined $result{$result_key};
 		}
 		if (defined $result{triggers}) {
-			is_deeply($req->triggers,$result{triggers},'Test trigger of "'.$query.'"');
+			my $triggers = $req->triggers;
+			my @sorted_expected = sort keys %{$result{triggers}};
+			is_deeply([sort keys %$triggers], \@sorted_expected, "Testing trigger keys of $query");
+			for my $k (@sorted_expected){
+				is_deeply([sort @{$triggers->{$k}}], [@{$result{triggers}{$k}}], "Testng triggers of key $k for $query");
+			}
 		}
 	}
 	

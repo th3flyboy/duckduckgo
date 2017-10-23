@@ -3,7 +3,6 @@ package DDG::Request;
 
 use Moo;
 use utf8;
-use List::MoreUtils qw{ uniq };
 
 =head1 SYNOPSIS
 
@@ -49,7 +48,6 @@ has query_raw => (
 my $whitespaces = qr{\s+};
 my $whitespaces_matches = qr{($whitespaces)};
 my $whitespaces_dashes = qr{[\s\-]+};
-my $dashes = qr{\-+};
 my $non_alphanumeric_ascii = qr{[\x00-\x1f\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x81\x{a7}]+};
 
 =attr query_raw_parts
@@ -100,8 +98,7 @@ sub _build_query_raw_parts {
 =attr query_parts
 
 This functions filters out the whitespace parts and empty parts of
-L</query_raw_parts>. Also it cuts down all part which would exceed making the
-query more then 100 non whitespace characters.
+L</query_raw_parts>.
 
 =cut
 
@@ -113,7 +110,7 @@ has query_parts => (
 sub _build_query_parts {
 	my $x;
 	[
-		grep { ( $x += length ) < 100 }
+		grep { ( $x += length ) < 500 } # 500 matches the internal query max
 		grep { ! /$whitespaces/ } 
 		grep { length }
 		@{shift->query_raw_parts}
@@ -159,11 +156,12 @@ has triggers => (
 sub _build_triggers {
 	my ( $self ) = @_;
 	my @parts = @{$self->query_raw_parts};
+	return {} if not scalar @parts;
 	my $x = $parts[0] eq '' ? 2 : 0;
 	my %triggers;
 	for ($x..(scalar @parts-1)) {
 		unless ($_ % 2) {
-			$triggers{$_} = [$self->generate_triggers($parts[$_])];
+			$triggers{$_} = $self->generate_triggers($parts[$_]);
 		}
 	}
 	return \%triggers;
@@ -179,25 +177,21 @@ triggers are generated out of a part please read the function.
 =cut
 
 sub generate_triggers {
-	my ( $self, $original_part ) = @_;
-	my $part = $original_part;
-	my @parts = (lc($part));
-	$part =~ s/^!//g;
-	push @parts, lc($part);
-	$part =~ s/\?$//g;
-	push @parts, lc($part);
-	if ($part =~ m/$dashes/) {
-		my @dashparts = split(/$dashes/, $part);
-		for my $dashpart (@dashparts) {
-			push @parts, lc($dashpart);
-		}
-		push @parts, lc($_) for @dashparts;
-		my $joined = join('', @dashparts);
-		push @parts, lc($joined);
-		my $space_joined = join(' ', @dashparts);
-		push @parts, lc($space_joined);
+	my $part = lc $_[1];
+	my %parts;
+	++$parts{$part};
+	$part =~ s/^!//go && ++$parts{$part};
+	$part =~ s/\?$//go && ++$parts{$part};
+	# Look for non-word characters, except single quotes, e.g. can't, John's
+	if ($part =~ /[^\w']/o) {
+		# The split could be part of the if but it would leave single quotes
+		# in the resulting terms.
+		my @boundary_words = split /\W+/o, $part ;
+		++$parts{$_} for @boundary_words;
+		++$parts{join('', @boundary_words)};
+		++$parts{join(' ', @boundary_words)};
 	}
-	return uniq sort @parts;
+	return [keys %parts];
 }
 
 =method generate_remainder
@@ -210,7 +204,14 @@ example.
 It doesnt check which one is bigger, the first one must always be lower then
 the second one given. You can also just give one index position.
 
+When called will set the remainder attribute for later use, e.g. L</matched_trigger>.
+
 =cut
+
+has remainder => (
+    is => 'rwp',
+	lazy => 1
+);
 
 sub generate_remainder {
 	my ( $self, $from_pos, $to_pos ) = @_;
@@ -231,7 +232,30 @@ sub generate_remainder {
 		$right_remainder =~ s/^\s//;
 		$remainder = $left_remainder.' '.$right_remainder;
 	}
+	$self->_set_remainder($remainder);
 	return $remainder;
+}
+
+=attr matched_trigger
+
+Uses L</remainder> and L</query_raw> to derive the trigger.  Will only
+work when using the remainder handle.
+
+=cut
+
+has matched_trigger => (
+	is => 'ro',
+	lazy => 1,
+	builder => 1
+);
+
+sub _build_matched_trigger {
+	my $self = shift;
+
+	my $r = $self->remainder || '';
+	my $qr = $self->query_raw;
+	$qr =~ s/\s*\Q$r\E\s*//i;
+	return $qr;
 }
 
 =attr query
@@ -349,6 +373,21 @@ has wordcount => (
 	builder => '_build_wordcount',
 );
 sub _build_wordcount { scalar @{shift->words} }
+
+=attr seen_plugins
+
+This array contains all the plugins which already worked with this request.
+This means all the plugins which are triggered. If they gave back a result or
+not, doesn't matter here. This list is used by L<DDG::Block/allow_duplicate>.
+
+=cut
+
+has seen_plugins => (
+	is => 'rw',
+	lazy => 1,
+	builder => '_build_seen_plugins',
+);
+sub _build_seen_plugins {[]}
 
 #
 # LANGUAGE / LOCATION / IP
